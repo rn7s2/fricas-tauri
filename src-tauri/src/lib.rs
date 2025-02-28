@@ -14,11 +14,46 @@ struct FriCAS {
     rx: Receiver<String>,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct Result {
+    result: String,
+    result_type: String,
+}
+
 #[tauri::command]
-fn execute(command: &str, state: tauri::State<Mutex<FriCAS>>) -> String {
+fn execute(command: &str, state: tauri::State<Mutex<FriCAS>>) -> Result {
+    fn katex_render(input: &str) -> String {
+        let opts = katex::Opts::builder().display_mode(true).build().unwrap();
+        match katex::render_with_opts(input, &opts) {
+            Ok(v) => v,
+            Err(e) => match e {
+                katex::Error::JsExecError(s) => s,
+                _ => "".into(),
+            },
+        }
+    }
+
     let state = state.lock().unwrap();
     state.tx.send(command.to_string()).unwrap();
-    state.rx.recv().unwrap()
+
+    let raw = state.rx.recv().unwrap();
+    if raw.contains("$$") {
+        let parts: Vec<&str> = raw.split("$$").map(str::trim).collect();
+        let result = "\\let\\sp=^\\let\\sb=_\\let\\leqno=\\;\n".to_owned()
+            + &parts[1][0..parts[1].find("\\leqno").unwrap()];
+        let result_type = parts[2].replace(" ->", "").trim().to_string();
+
+        let html1 = katex_render(&result);
+        Result {
+            result: html1,
+            result_type,
+        }
+    } else {
+        Result {
+            result: "nil".into(),
+            result_type: "nil".into(),
+        }
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
