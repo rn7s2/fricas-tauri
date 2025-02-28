@@ -1,49 +1,54 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { MathJax, MathJaxContext } from "better-react-mathjax";
+
+const nilOutput = "$$nil$$";
+const latexHelper = (input: string) => {
+  const tmp = input
+    .replace("$$", "$$$$\\let\\sp=^\\let\\sb=_\\let\\leqno=\\;\n")
+    .split("$$");
+  return [`$$${tmp[1]}$$`, tmp[2].replace(" ->", "")];
+};
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [result, setResult] = useState("");
+  const [resultType, setResultType] = useState("");
+  const [command, setCommand] = useState("");
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
+  async function execute() {
+    const original: string = await invoke("execute", { command });
+    if (!original.includes("$$")) {
+      setResult(nilOutput);
+      setResultType(nilOutput);
+      return;
+    }
+
+    const [result, type] = latexHelper(original);
+    setResult(result);
+    setResultType(type);
   }
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vitejs.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://reactjs.org" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
+    <main>
       <form
-        className="row"
         onSubmit={(e) => {
           e.preventDefault();
-          greet();
+          execute();
         }}
       >
         <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+          onChange={(e) => setCommand(e.currentTarget.value)}
+          placeholder="Enter a FriCAS command..."
         />
-        <button type="submit">Greet</button>
+        <button type="submit">Run</button>
       </form>
-      <p>{greetMsg}</p>
+
+      <MathJaxContext>
+        <MathJax>{result}</MathJax>
+        <div style={{ float: "right" }}>
+          <MathJax>{resultType}</MathJax>
+        </div>
+      </MathJaxContext>
     </main>
   );
 }
